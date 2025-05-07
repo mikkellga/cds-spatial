@@ -26,11 +26,12 @@ opts_knit$set(width=75)
 
 
 ```{r libraries, include=FALSE}
+# Install cartogram
+# Install spdep 
+
 # Library 
 library(sf)
 library(tidyverse)
-# library(htmltools)
-# library(googlesheets4)
 library(mapview)
 ```
 
