@@ -5,6 +5,7 @@ date: "04/01/2021 updated `r Sys.Date()`"
 output: html
 ---
 
+
 ```{r setup, include=FALSE}
 library(knitr)
 
@@ -20,6 +21,7 @@ opts_chunk$set(echo=FALSE,
 opts_knit$set(width=75)
 options(scipen=999)
 ```
+
 
 # Introduction into GIS in R
 There are a few key spatial packages available for Spatial Analysis in R, which you need to install as you progress through these exercises. The most basic are 
@@ -46,13 +48,51 @@ In this exercise you will read in three shapefiles (parks, playgrounds, and fore
 * Use the `head()` function and identify the first few features of each layer.
 
 ```{r load, eval=FALSE, echo=TRUE}
+library(sf)
+forests <- st_read("../data/forests.shp")
+playgrounds <- st_read("../data/playgrounds4326.shp")
+parks <- st_read("../data/parks.shp")
+shelters <- st_read("../data/shelters.json")
+```
+```{r}
+head(forests)
+plot(forests$geometry)
+```
 
+```{r}
+head(playgrounds)
+plot(playgrounds$geometry)
+```
+```{r}
+head(parks)
+plot(parks$geometry)
+```
+```{r}
+head(shelters)
+plot(shelters$geometry)
 ```
 
 ## Questions: 
 
 1. How many features does each layer contain and what kind of geometry are they?
+- Forests: 32
+
+- Playgrounds: 6 
+
+- Parks: 6
+
+- Shelters: 5
+
+
 2. What is the CRS value in these objects?
+- Forests: UTM zone 32N
+
+- Playgrounds: NA
+
+- Parks: ETRS89 / UTM zone 32N
+
+- Shelters: ETRS89 / UTM zone 32N
+
 
 
 Well done, now you should see how easy it can be to read in shapefiles and you got your first taste of what an sf object looks like.
@@ -74,21 +114,24 @@ Spatial objects in `sf` are just data frames with some special properties. This 
 
 ```{r wrangle-parks, eval=FALSE, echo=TRUE}
 # Load the sf package
-___
+library(sf)
 
 # ... and the dplyr package
-___
+library(dplyr)
 
 # Use filter() to limit to over5ha parks
-___
+over5ha_parks <- parks %>% 
+  filter(areal_m2 > 50000)
 
 # Count the number of rows
-___
+nrow(over5ha_parks)
 
 # Limit to navn and areal_m2 variables
-
+over5ha_parks <- over5ha_parks %>% 
+  select(navn, areal_m2)
 
 # Use head() to look at the first few records
+head(over5ha_parks)
 
 ```
 
@@ -113,21 +156,24 @@ In this exercise, you will convert the data frame to what's called a `tibble` wi
 * Pull out the third observation from columns `a` and `b` using `base` R (you'll need square brackets like `[3]`).
 
 ```{r geometry, eval = FALSE, echo = TRUE}
+# Load Tidyverse into workspace
+library(tidyverse)
+
 # Create a standard, non-spatial data frame with one column
-df <- ___(a = 1:3)
+df <- data.frame(a = 1:3)
 
 # Add a list column to your data frame
-df$b <- ___(1:4, 1:5, 1:10)
+df$b <- list(1:4, 1:5, 1:10)
 
 # Look at your data frame with head
-___(df)
+head(df)
 
 # Convert your data frame to a tibble and print on console
-___(df)
+tibble::as_tibble(df)
 
 # Pull out the third observation from both columns individually
-df$___[___]
-df$___[___]
+df$a[3]
+df$b[3]
 ```
 You now have a better sense of what a list column is. You can see how it can be used to store far more information in a single variable than other types of columns. These list-columns are how `sf` stores detailed geographic information on each feature in a single record. Converting the data frame to a tibble is not necessary but a tibble can provide a better print out of the object.
 
@@ -137,10 +183,15 @@ There are several functions in `sf` that allow you to access geometric informati
 Note that the result of functions like `st_area()` and `st_length()` will not be a traditional vector. Instead the result has a class of `units` which means the vector result is accompanied by metadata describing the object's units. As a result, code like this won't quite work:
 
 ```{r example1, eval=FALSE, echo=TRUE}
-# This will not work
+# # This will not work
 result <- st_area(parks)
-result > 100000
+# result > 100000
 ```
+The error shown to inform you to be carefull about units:
+
+"Fejl i Ops.units(result, 100000) : 
+  both operands of the expression should be "units" objects"
+
 
 Instead you need to either remove the units with `unclass()`:
 
@@ -171,11 +222,35 @@ length(which(result > val))
 
 
 ```{r forests, eval=FALSE, echo=TRUE}
+library(sf)
+head(forests)
+```
+
+```{r forest area}
+forests_area_m2 <- st_area(forests)
+forests_area_m2
+```
+```{r forest area hist}
+hist(forests_area_m2)
+```
+```{r forests over 20ha}
+forests_area_m2_over_20ha <- forests %>% 
+  filter(unclass(st_area(forests)) > 200000)
+nrow(forests_area_m2_over_20ha)
+forests_area_m2_over_20ha
+```
+```{r plot geometry and name}
+forests_area_m2_over_20ha$navn <- as.factor(forests_area_m2_over_20ha$navn)
+
+ggplot(forests_area_m2_over_20ha) +
+  geom_sf(aes(fill = factor(navn))) +
+  guides(fill = guide_legend(ncol = 2)) +
+  labs(fill = NULL)
 
 ```
 
 
-Excellent! Computing geographic information for your vector layers can be done with functions like `st_area()` and `st_length()`. As you saw in this exercise, these functions produce a result that can be used in additional calculations but you need to be careful because the result is a `units` object that requires a little additional processing like using `unclass()`.
+Excellent! Computing geographic information for your vector layers can be done with functions like `st_area()` and `st_length()`. As you saw in this exercise, these functions produce a result that can be used in additional calculat1ions but you need to be careful because the result is a `units` object that requires a little additional processing like using `unclass()`.
 
 
 # Task 5: Plot vector spatial objects
@@ -194,9 +269,15 @@ Often, you also want to plot multiple spatial objects together to see if and how
 * Plot the geometry of the forests and the parks together, making the parks pink and the forests green.
 
 ```{r plotting-sf, eval=FALSE}
+plot(forests)
+plot(forests$areal_m2)
 
+forests_geometry <- st_geometry(forests)
+plot(forests_geometry)
+
+plot(forests_geometry, col = "darkgreen")
+plot(parks$geometry, col = "green", add = T)
 ```
-
 
 Well done! Yes, these plots are not super pretty but you can't beat `plot()` for a quick look using few keystrokes. And remember you can use `plot(st_geometry(geo_object))` to plot just the geometry of your object.
 
@@ -219,13 +300,36 @@ Multi-band rasters will have more than one layer. An example is a color aerial p
 * Use the `nlayers()\nlyr()` function to determine how many bands/layers are in each object.
 
 ```{r loadraster, eval=FALSE, echo=TRUE}
+library(raster)
+library(terra)
 
+elevation <- raster("../data/DNK_msk_alt.grd") # using the raster library
+aarhus <- terra::rast("../data/Aarhus_1m.TIF") # using the terra library
+
+class(elevation)
+class(aarhus)
+
+nlayers(elevation)
+nlyr(aarhus)
 ```
+```{r}
+elevation
+```
+```{r}
+aarhus
+```
+
 
 *Questions:*
 
 1. What are the dimensions (number of columns and rows) of the `elevation` raster?
+- elevation: nrow: 396, ncol: 876, nlyr: 346896.
+- aarhus: nrow: 3334, ncol: 3334, nlyr: 5.
+
 2. What is the resolution of `aarhus` orthophoto? How many layers does it contain and what do they represent?
+
+- Resolution: 1, 1
+- Layers: 5 layers
 
 Now you've learned how to read in single and multi-band rasters. You should have noticed, based on the `nlayers()` function, that the `elevation` object has a single layer and the `aarhus` object has five (well, four useful ones, if you plot it).
 
@@ -240,8 +344,18 @@ Instead of storing raster objects in data frames, the `raster` package stores sp
 * Use the `crs()` function to get the coordinate reference system of `aarhus` and `elevation`.
 * Use the `ncell()` function to determine how many grid cells are in the `elevation` layer and the `aarhus` layer.
 
-```{r load raster, eval=FALSE, echo=TRUE}
+```{r extent}
+extent(elevation)
+ext(aarhus)
+```
+```{r crs}
+crs(elevation)
+crs(aarhus)
+```
 
+```{r ncell}
+ncell(elevation)
+ncell(aarhus)
 ```
 
 
@@ -249,6 +363,16 @@ Great work! Although rasters are not stored as data frames, the metadata can eas
 
 *Question 3: It makes sense that the extents and number of cells for Danish national elevation data and Aarhus city would be different because their sizes diverge, but why are the units so different? What are these units?*
 
+Because the elevation x and y are in degrees and the aarhus x and y are in meters.
+
+```{r investiation elevation}
+elevation
+```
+
+```{r investigation aarhus}
+aarhus
+```
+I believe it is due to the difference in resolution difference. 
 
 # Task 8: Plot your raster object
 Similar to what you saw in the exercises related to vector objects it's often useful to quickly look at a map of your raster objects with the `plot()` function.
@@ -263,12 +387,42 @@ The raster package has added useful methods for plotting both single and multi-b
 * Try to plot the two images together (on top of one another). Can you do it?
 
 ```{r plot raster, eval=FALSE, echo=TRUE }
+plot(elevation)
+plot(aarhus)
+plotRGB(aarhus)
+```
 
+```{r}
+# read data with raster
+elevation <- raster("../data/DNK_msk_alt.grd")
+
+# convert raster to terra
+elevation <- rast(elevation)
+
+# read data with terra
+aarhus <- rast("../data/Aarhus_1m.TIF") 
+
+# project elevation to Aarhus crs
+elevation_aarhus_crs <- project(elevation, crs(aarhus))
+
+# crop elevation to Aarhus extent 
+elevation_aarhus_crs <- crop(elevation_aarhus_crs, ext(aarhus), snap = "out")
+
+# zlim for elevation colors
+z <- range(values(elevation_aarhus_crs), na.rm = TRUE)
+
+# plot base map
+plotRGB(aarhus, stretch = "lin")
+
+# overlay elevations
+plot(elevation_aarhus_crs,
+     add = TRUE,
+     zlim = z,
+     alpha = 0.5)
 ```
 
 
 Nice work! As you can see, the `plot()` function can be used to plot single layers while the `plotRGB()` function can be used to combine layers into a single image. Plotting two raster objects of different extents, resolution and CRS can not be done without additional wrangling.
-
 
 
 # Task 9: Vector and raster coordinate systems
@@ -285,7 +439,18 @@ When the geographic data you read in with `sf` already has a CRS defined both `s
 * Do not use the `crs()` function to define/assign a CRS to the `elevation` object as it already has a CRS of its own and renaming it won't change the properties of the file.
 
 ```{r crs, eval=FALSE}
+st_crs(playgrounds)
+st_crs(forests)
 
+```
+```{r}
+st_crs(playgrounds) <- 4258
+```
+```{r}
+crs(aarhus)
+```
+```{r}
+crs(elevation)
 ```
 
 
@@ -308,9 +473,17 @@ Note that you will use `method = "ngb"` in your call to `projectRaster()` to pre
 * Use `st_crs()` on `playgrounds` and `elevation` to confirm that they now have the same CRS. They should all have a CRS that starts with `+proj=utm`.* 
 
 ```{r crs-assign, eval=FALSE}
+aarhus <- raster("../data/Aarhus_1m.TIF")
+the_crs <- crs(aarhus, asText = TRUE)
+playgrounds <- st_transform(playgrounds, the_crs)
 
+elevation <- raster("../data/DNK_msk_alt.grd")
+the_crs <- crs(aarhus) # projectRaster needs crs as object, not as above
+elevation <- projectRaster(elevation, crs = the_crs) # projectRaster needs "crs="
+
+st_crs(playgrounds)
+st_crs(elevation)
 ```
-
 
 Great work! This may be the least fun part of spatial analysis but knowing how to do it will save you from a lot of frustration later.
 
@@ -332,7 +505,15 @@ Make sure `sf`, `raster` and `tmap` are loaded in your workspace.
 ```{r plot, eval=FALSE}
 # Plot aarhus and playgrounds (run both lines together)
 # Do you see the playgrounds?
+library(terra)
+library(sf)
+aarhus <- rast("../data/Aarhus_1m.TIF")
 
+crs(aarhus)
+crs(playgrounds)
+
+plotRGB(aarhus, alpha = 0.8)
+plot(playgrounds, col = "purple", pch = 19, lwd = 2, add = TRUE)
 
 
 # Simply run the tmap code
@@ -341,7 +522,7 @@ tm_shape(aarhus) +
     tm_rgb() + 
     tm_shape(parks) + 
     tm_polygons(col = "green") +
-    tm_shape(playgrounds_crs) + 
+    tm_shape(playgrounds) + 
     tm_dots(col = "yellow",
               size = 1)
 ```
@@ -356,10 +537,66 @@ I have prepared a `mystery.zip` folder for you at this link: [Download the myste
 If you need additional layers, check the `Bonus` section below
 
 ```{r mystery-map}
-
 # YOUR SOLUTION HERE
+# reading the files
+library(sfarrow)
+bbr <- st_read_parquet("mystery/a_bbr_1990.parquet")
+
+city_border <- st_read("mystery/a_city_border1988.shp")
+districts <- st_read("mystery/districts2023.geojson")
+aarhus_mun <- st_read("mystery/aarhus_mun.geojson")
+```
+```{r}
+# verify CRSs
+st_crs(bbr) == st_crs(city_border)
+st_crs(city_border) == st_crs(districts)
+st_crs(districts) == st_crs(aarhus_mun)
+```
+```{r}
+plot(aarhus_mun)
+plot(districts)
+plot(city_border)
+plot(bbr)
+
+tmap_mode("plot")
+
+tm_shape(aarhus_mun) +
+  tm_borders(lwd = 3) +
+  tm_shape(districts) +
+  tm_borders(lwd = 1) +
+  tm_shape(city_border) +
+  tm_borders(lwd = 2, col = "orange") +
+  tm_shape(bbr) +
+  tm_dots(size = 0.02, col = "purple", alpha = 0.6)
 ```
 
+```{r}
+high_rises <- bbr %>% 
+  dplyr::filter(byg054AntalEtager > 6)
+
+tm_shape(aarhus_mun) +
+  tm_borders() +
+  tm_shape(high_rises) +
+  tm_dots(size = 0.02, col = "blue", alpha = 0.6)
+
+```
+```{r}
+library(tidyverse)
+bbr_etager_na_omit <- bbr %>% 
+  filter(!is.na(byg054AntalEtager)) %>% 
+  arrange()
+
+ggplot(na.rm = TRUE) +
+  geom_sf(data = aarhus_mun, fill = NA, linewidth = 0.6) +
+  geom_sf(data = bbr_etager_na_omit, aes(color = byg054AntalEtager),
+          size = 0.8, alpha = 1) +
+  labs(color = "Antal etager") +
+  scale_colour_continuous(palette = c("orange", "purple")) +
+  ggtitle("Antal Etager på Aarhusianske Bygninger")
+  theme_minimal()
+
+
+```
 
 
 # Bonus: Loading data from the internet 
