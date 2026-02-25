@@ -227,7 +227,7 @@ What can you say about the content of this file?
 # /End Code/ #
 ```
 
-# Exercise 3 - Defining coordinate systems
+# Exercise 3 - Define coordinate systems
 A machine-readable CRS is prerequisite to spatial visualisation and analysis, but not all spatial datasets that float around have its CRS defined.  Here you learn to define/specify the coordinate systems for datasets where the CRS is NA/missing/unrecognized by R. You can fix this situation if *YOU* know what the CRS should be. 
 
 Look at the coordinates in `places` and `nitrates`again. While both refer to places in Denmark, their formats are different, signalling different CRS. Can you guess what they are?
@@ -258,7 +258,7 @@ nitrates25832
 Wonderful, your vector data now have defined spatial metadata. In the next step, reconcile these two CRSs so you can display them in the same map.
 
 
-# Exercise 4 - Reconciling coordinate systems
+# Exercise 4 - Reconce coordinate systems
 
 Now that you know that coordinate systems differ, make them compatible. You have two final CRS choices. Convert your objects to one or another CRS so that you can display the nitrate samples and DK places over the elevation map of Denmark. 
 
@@ -306,13 +306,73 @@ Additional challenge:
 # /End Code/ #
 ```
 
-# Exercise 6: Challenge - Make a map that lies
+# Exercise 6 - Challenge: Make a map that is true and that lies
 
 You are a political consultant. Your client wants a map of [Danish election results (2025)](https://docs.google.com/spreadsheets/d/1R77xvSEdEF5UMF6u1POlHVyYHbB1zFkNqEYTkwD7GPw/edit?usp=sharing) that makes their party look strong. Choose your party (e.g. DF) and create:
 
 1. An honest map: Follows cartographic best practices
 2. A misleading map: Technically correct but emphasizes your client's strength (through color, classification, or geographic focus)
 3. A 300-word memo: Explains how the misleading map manipulates perception without lying
+
+
+### Get data
+
+```{r}
+# get municipalities
+muns <- readRDS("../data/gadm36_DNK_2_sp.rds") %>% 
+  st_as_sf() 
+
+# get votes
+library(googlesheets4)
+gs4_deauth()
+votes <- read_sheet("https://docs.google.com/spreadsheets/d/1R77xvSEdEF5UMF6u1POlHVyYHbB1zFkNqEYTkwD7GPw/edit?")
+
+# align municipality names
+`%nin%` <- Negate(`%in%`)
+votes$Division %in% muns$NAME_2
+votes$Division[votes$Division %nin% muns$NAME_2]
+muns$NAME_2[31] <- "Aarhus"
+muns$NAME_2[21] <- "Høje-Taastrup"
+muns$NAME_2[25] <- "Copenhagen"
+
+# join up
+
+mun_vote <- muns %>% 
+  select(NAME_2) %>% 
+  left_join(votes, by = c("NAME_2"="Division"))
+mun_vote
+```
+
+### Look at the data
+Is everything in place, any municipalities missing?
+```{r}
+# check out the voting data
+library(mapview)
+mapview(mun_vote, zcol = "A")
+```
+
+
+###  Choose a map that is honest and one that lies
+```{r}
+a <- tm_shape(mun_vote) + tm_polygons(col = "A", style = "pretty", n = 5)
+a
+# "Jenks" style further smooths over the gaps
+b <- tm_shape(mun_vote) + tm_polygons(col = "A", style = "jenks", n = 6)
+b
+# quantile style divides into 5 even groups
+c <- tm_shape(mun_vote) + tm_polygons(col = "A", style = "quantile", n=5)
+c
+# Equal interval style divides the distribution into even groups
+d <- tm_shape(mun_vote) + tm_polygons(col = "A", style = "equal", n = 5)
+d
+# Write maps above to objects and plot them side by side 
+# with tmap_arrange() for better comparison
+
+tmap_arrange( a,b,c,d)
+
+```
+
+
 
 ## Refs
 Tennekes, Martijn. 2019. Tmap: Thematic Maps. https://CRAN.R-project.org/package=tmap.
