@@ -80,6 +80,16 @@ cat("Area of Denmark in utm projection (sq km):", dk_area_utm, "\n")
 cat("Area of Greenland in utm projection (sq km):", gl_area_utm, "\n")
 cat("Greenland is approximately", round(gl_area_utm / dk_area_utm, 1), "times larger than Denmark.\n")
 
+# --- UTM 26 ---
+dk_gl_utm26 <- dk_gr %>% 
+  st_transform("EPSG:32626")
+dk_area_utm26 <- dk_gl_utm26 %>%  mutate(area_sqkm = as.numeric(st_area(.)) / 10^6) %>% filter(admin == "Denmark") %>% pull(area_sqkm)
+gl_area_utm26 <- dk_gl_utm26 %>%  mutate(area_sqkm = as.numeric(st_area(.)) / 10^6)  %>% filter(admin == "Greenland") %>% pull(area_sqkm)
+
+cat("Area of Denmark in utm26 projection (sq km):", dk_area_utm26, "\n")
+cat("Area of Greenland in utm26 projection (sq km):", gl_area_utm26, "\n")
+cat("Greenland is approximately", round(gl_area_utm26 / dk_area_utm26, 1), "times larger than Denmark.\n")
+
 
 # 7. Reflection and Challenge -----------------------------------------------------------
 # While Greenland IS bigger, Mercator makes it look even bigger (area distortion increases at poles).
@@ -114,12 +124,13 @@ panel <- function(x, title, n = c(8, 8)) {
     )
 }
 
-p1 <- panel(dk_gl_utm,   "UTM")
+p1 <- panel(dk_gl_utm,   "UTM32")
 p2 <- panel(dk_gl_equal, "Equal-area")
 p3 <- panel(dk_gl_merc,  "WGS84 / Mercator-ish")
+p4 <- panel(dk_gl_utm26, "UTM26")
 
 library(patchwork)
-p1 + p2 + p3 + plot_layout(nrow = 1)
+p1 + p2 + p3 + p4+ plot_layout(nrow = 2)
 
 
 # 9. Sequential series of visuals
@@ -173,7 +184,7 @@ p_ll <- base_map(
 p_ll
 
 # --- Get a better view of Mercator -- 
-# Plot Mercator on a sphere
+# Plot Mercator on a sphere (https://rstudio-pubs-static.s3.amazonaws.com/1135653_0fae07141a5a41099d1022c5371a62c2.html)
 ggplot()+
   geom_sf(data = world)+
   geom_sf(data = tissots)+
