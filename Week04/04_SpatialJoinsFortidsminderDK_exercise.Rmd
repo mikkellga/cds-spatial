@@ -37,9 +37,8 @@ In this task, you will find out which municipality in Denmark has the most Vikin
 * Plot the monuments (`viking`) on top of the municipalities. You will want to plot only the geometry of the municipalities.
 
 ```{r monuments-dk, eval=FALSE}
-
 # Load the anlaeg_all_25832 monuments into R
-monuments <- read_sf("_______")
+monuments <- read_sf("../data/fortidsminder/anlaeg_all_25832.shp")
 
 # Check the periodisation and type of the monuments
 unique(monuments$datering)
@@ -47,18 +46,18 @@ unique(monuments$anlaegsbet)
 
 # Filter Viking-era finds
 viking <- monuments %>% 
-  filter( ______________)
+  filter( datering == "Vikingetid")
 
 viking
 
 # Load municipalities either from data/ or via geodata library > gadm
 mun <- read_rds("../data/gadm36_DNK_2_sp.rds")
 
-# Check that the municipalities are a simple feature and in UTM 32N
 
+# Check that the municipalities are a simple feature and in UTM 32N
 mun_25832 <- mun %>% 
-  __________() %>% 
-  __________(25832)
+  st_as_sf() %>% 
+  st_transform(25832)
 
 
 # Plot the monuments on top of the municipalities
@@ -87,10 +86,11 @@ Importantly, the `st_join()` function requires `sf` data frames as input and wil
 class(viking)
 
 # Join the viking monuments with the municipalities
-viking <-  _____(____,_____)
+viking <-  st_join(viking,mun_25832[,7])
 
 # Confirm that viking_neigh has the municipality information
 head(viking)
+colnames(viking)
 
 # Calculate the count of monuments per municipality
 viking %>% 
@@ -108,8 +108,7 @@ least
   
 # Plot the municipalities with fewest Viking finds in red over DK municipalities
 plot(mun_25832$geometry, col = "grey", border = "white")
-plot(st_geometry(_________________, col = "red", add = T) 
-
+plot(st_geometry(mun_25832 %>% filter(NAME_2 %in% least$NAME_2), col = "red", add = T) 
 ```
 
 Great! The monuments object did not have municipality information until you performed the spatial join with `st_join()`. Now that the municipality information is included you can supply each municipality office with the count and coordinates of monuments they are in charge of so they can monitor and safeguard.
@@ -127,30 +126,31 @@ Great! The monuments object did not have municipality information until you perf
 
 m_summary <- monuments %>%
   st_join(mun_25832) %>% 
-  ________() %>% 
-  group_by(_____) %>% 
+  st_drop_geometry() %>% 
+  group_by(NAME_2) %>% 
   tally()%>% 
   rename(monuments = n)
 
 v_summary <- viking %>%
   st_drop_geometry() %>% 
-  group_by(______) %>% 
+  group_by(NAME_2) %>% 
   tally()%>% 
   rename(viking = n)
 
 
 # Join the summaries to the municipalities data and calculate density per 1 km square
 mun_25832 <- mun_25832 %>% 
-  left_join(________, by = "NAME_2")  %>% 
-  mutate(density = monuments / (st_area(.)/________)) %>% # density per 1km square
-  left_join(______, by = "NAME_2")  %>% 
-  mutate(v_density = viking / (st_area(.)/__________)) 
+  left_join(m_summary, by = "NAME_2")  %>% 
+  mutate(density = monuments / (st_area(.)/1000000)) %>% # density per 1km square
+  left_join(v_summary, by = "NAME_2")  %>% 
+  mutate(v_density = viking / (st_area(.)/1000000)) 
 
 
 # Visualize the density of finds vis-a-vis the municipalities with 'NA' viking finds
+library(mapview)
 mun_25832 %>%
   mapview(zcol = "density") + 
-  mapview(_________, col.regions = "red")
+  mapview(mun_25832 %>% filter(is.na(v_density)), col.regions = "red")
 
 ```
 
@@ -170,13 +170,13 @@ Beginning with centroids, centroid calculations should generally be performed on
 * Can you vary the size of centroids by the number of Viking finds contained by the municipality/or by their density?
 
 ```{r mun-centroids, eval = FALSE}
-centroids <- _________(mun_25832)
+centroids <- st_centroid(mun_25832)
 
 mapview(mun_25832, col.regions = "beige", legend = FALSE) + 
-  mapview(______,_________,_______)
+  mapview(centroids,cex = "v_density", zcol = "v_density")
 
 mapview(mun_25832, col.regions = "beige", legend = FALSE) + 
-  mapview(______,_________,_______)
+  mapview(centroids,cex = "monuments", zcol = "viking")
 ```
 
 # Task 4: Computing bounding boxes
@@ -206,18 +206,18 @@ a_viking <- viking %>%
 
 # Plot the Aarhus municipality and the local viking finds
 plot(st_geometry(aarhus_mun), col = "grey", border = "white")
-plot(_______________, add = TRUE, pch = 16, col = "forestgreen")
+plot(st_geometry(a_viking), add = TRUE, pch = 16, col = "forestgreen")
 
 # Check the coordinates of the Aarhus bounding box
 st_bbox(aarhus_mun)
 
 # Compute a bounding box polygon
-aarhus_box <- _________(aarhus_mun, _______)
+aarhus_box <- st_make_grid(aarhus_mun, n=1)
 
 # Plot all the DK municipalities, add the shelters and the new box outlining the Aarhus municipality
 plot(st_geometry(mun_25832), col = "grey", border = "white")
-plot(a_viking$geometry, pch = 16, col = "forestgreen", ______)
-plot(aarhus_box, _____,_____)
+plot(a_viking$geometry, pch = 16, col = "forestgreen", add = T)
+plot(aarhus_box, alpha = 0.1, lwd = 2, add = T)
 ```
 Bounding box completed! You can see in the plot that the bounding box is the minimum rectangular polygon that fits all the monuments. You might now clip a series of layers to this box for a consistent extent over the Aarhus municipality. 
 
@@ -265,11 +265,17 @@ df <- data.frame(place = c("Aarhus Domkirke",
                  longitude=c(10.2102364,10.1949197,10.2033485),
                  latitude=c(56.1574919,56.1772228,56.174346))
 
+df %>% 
+  st_as_sf(coords = c("longitude", "latitude"), crs = 4326)
+
 # Compute a buffer around your address
+df_buf <- st_buffer(df, dist = 300)
+mapview(df_buf)
 
 
 # Calculate which shelters fall within the buffer or bounding box of your place
-
+my_shelters <- st_intersection(shelters, df_buf)
+mapview(my_shelters)
 
 # Visualize your buffer and bounding box with intersecting shelters
 
